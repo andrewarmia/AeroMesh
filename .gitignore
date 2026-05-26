@@ -1,0 +1,47 @@
+# ── Course materials & research (not published to GitHub) ──
+*.docx
+*.pptx
+*.pdf
+DSS Project/
+generate_aeromesh*.py
+AeroMesh_Manuscript*
+AeroMesh_Report*
+AeroMesh_Presentation*
+PayMesh*
+merged_*
+Lecture*.pdf
+Distributed_System*
+Authentication*
+Manuscript_*
+
+# Optional local docs (full text lives in README)
+AeroMesh_ELI5.md
+AeroMesh_ExamQA.md
+AeroMesh_CV_Agent_Brief.md
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+
+# ── Node / frontend dev ──
+demo/frontend/node_modules/
+demo/frontend/dist/
+demo/frontend/.vite/
+demo/frontend/npm_dev_output.txt
+*.local
+
+# ── IDE & OS ──
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ── Logs ──
+*.log

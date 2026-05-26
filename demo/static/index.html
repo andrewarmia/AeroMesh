@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AeroMesh — BFT Drone Swarm Demo</title>
+<style>
+/* ── RESET & VARIABLES ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy:    #070e1a;
+  --panel:   #0d1b2a;
+  --border:  #1a3050;
+  --teal:    #00b4d8;
+  --mint:    #caf0f8;
+  --amber:   #f4a261;
+  --green:   #2dc653;
+  --red:     #e63946;
+  --purple:  #9b59b6;
+  --orange:  #f77f00;
+  --gray:    #64748b;
+  --yellow:  #ffe06a;
+  --white:   #e8f4ff;
+  --dim:     #94a3b8;
+  --font:    'Segoe UI', system-ui, sans-serif;
+}
+
+/* ── LAYOUT ──────────────────────────────────────────────────── */
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font);
+  background: var(--navy);
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+}
+
+/* HEADER */
+header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: linear-gradient(90deg, #070e1a 0%, #0a1628 40%, #070e1a 100%);
+  border-bottom: 1px solid var(--border);
+}
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-brand svg { width: 30px; height: 30px; }
+.header-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: linear-gradient(90deg, var(--teal), var(--mint));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header-subtitle {
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* METRICS BAR */
+.metrics {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 5px 16px;
+  background: #080f1c;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.metric-label { color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.metric-value { font-weight: 700; color: var(--teal); font-size: 12px; font-family: monospace; }
+.metric-value.warn  { color: var(--amber); }
+.metric-value.error { color: var(--red); }
+.metric-value.ok    { color: var(--green); }
+
+/* MAIN AREA */
+.main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── CANVAS PANEL ─────────────────────────────────────────── */
+.canvas-panel {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #0d1f35 0%, #070e1a 70%);
+}
+
+/* Starfield layer */
+#starfield {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: white;
+}
+
+/* SVG canvas */
+#svgCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Phase banner */
+#banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 24px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  transition: all 0.3s;
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+}
+#banner.visible { opacity: 1; }
+
+/* Narration text */
+#narration {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90%;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mint);
+  background: rgba(7, 14, 26, 0.85);
+  border: 1px solid rgba(0, 180, 216, 0.3);
+  border-radius: 8px;
+  padding: 7px 18px;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+  white-space: nowrap;
+}
+#narration.visible { opacity: 1; }
+
+/* Canvas flash overlay */
+#flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+/* ── RIGHT PANEL ──────────────────────────────────────────── */
+.right-panel {
+  width: 310px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* Controls */
+.controls {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.controls-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
+.btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.btn {
+  padding: 9px 8px;
+  border: none;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: filter 0.15s, transform 0.1s;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+.btn:hover { filter: brightness(1.2); }
+.btn:active { transform: scale(0.96); }
+.btn-shortcut {
+  font-size: 9px;
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+.btn-bft     { background: linear-gradient(135deg, #023e8a, #0077b6); color: #caf0f8; }
+.btn-byz     { background: linear-gradient(135deg, #7b0d1e, #c1121f); color: #ffd0d3; }
+.btn-kill    { background: linear-gradient(135deg, #5a189a, #7b2d8b); color: #e0c3fc; }
+.btn-jam     { background: linear-gradient(135deg, #3d405b, #5c5f7a); color: #c8c8d8; }
+.btn-gcs     { background: linear-gradient(135deg, #7b4d00, #c06000); color: #ffe5b0; }
+.btn-merge   { background: linear-gradient(135deg, #6d4c00, #e67e00); color: #fff0cc; }
+
+.btn-auto {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #004e64, #00b4d8);
+  color: #e0f7ff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  transition: filter 0.15s, transform 0.1s;
+}
+.btn-auto:hover  { filter: brightness(1.15); }
+.btn-auto:active { transform: scale(0.98); }
+
+.btn-row { display: flex; gap: 6px; }
+.btn-reset {
+  flex: 1;
+  padding: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: background 0.15s;
+}
+.btn-reset:hover { background: rgba(255,255,255,0.1); }
+
+/* Speed control */
+.speed-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.speed-label { font-size: 10px; color: var(--dim); white-space: nowrap; }
+.speed-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--teal) 0%, var(--border) 0%);
+  outline: none;
+}
+.speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--teal);
+  cursor: pointer;
+}
+#speedVal { font-size: 10px; color: var(--teal); font-weight: 700; min-width: 26px; }
+
+/* RSM LOG */
+.rsm-log {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #080f1c;
+  flex-shrink: 0;
+}
+.rsm-log-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rsm-count {
+  background: var(--teal);
+  color: #000;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 9px;
+  font-weight: 700;
+}
+#rsmEntries {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 90px;
+  overflow-y: auto;
+}
+.rsm-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-family: monospace;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(0, 180, 216, 0.07);
+  border-left: 2px solid var(--teal);
+  animation: rsmSlide 0.4s ease;
+}
+@keyframes rsmSlide {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.rsm-seq  { color: var(--teal); font-weight: 700; min-width: 28px; }
+.rsm-view { color: var(--dim); font-size: 9px; }
+.rsm-cmd  { color: var(--white); font-size: 10px; }
+
+/* EVENT LOG */
+.log-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+}
+.log-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  padding: 8px 12px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#eventLog {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 10px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+#eventLog::-webkit-scrollbar { width: 4px; }
+#eventLog::-webkit-scrollbar-track { background: transparent; }
+#eventLog::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.log-info     { color: var(--dim); }
+.log-protocol { color: var(--teal); }
+.log-success  { color: var(--green); }
+.log-warn     { color: var(--amber); }
+.log-error    { color: var(--red); }
+.log-ts { color: #2a3a52; margin-right: 4px; }
+
+/* LEGEND */
+.legend {
+  flex-shrink: 0;
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  background: #080f1c;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--dim);
+}
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── SVG DRONE ANIMATIONS ─────────────────────────────────── */
+@keyframes drone-hover {
+  0%,100% { transform: translateY(0px); }
+  50%     { transform: translateY(-5px); }
+}
+@keyframes drone-glitch {
+  0%   { transform: translate(0,0) rotate(0deg); }
+  15%  { transform: translate(-4px, 2px) rotate(-3deg); }
+  30%  { transform: translate(4px,-2px) rotate(3deg); }
+  45%  { transform: translate(-3px, 0) rotate(-1deg); }
+  60%  { transform: translate(3px, 1px) rotate(2deg); }
+  75%  { transform: translate(-1px,-1px) rotate(0deg); }
+  100% { transform: translate(0,0) rotate(0deg); }
+}
+@keyframes drone-pulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.4; }
+}
+
+/* ── KEYBOARD SHORTCUT TOOLTIP ────────────────────────────── */
+.kbd-hint {
+  display: inline-block;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-family: monospace;
+  color: var(--dim);
+}
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────── -->
+<header>
+  <div class="header-brand">
+    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Quadcopter logo -->
+      <line x1="20" y1="20" x2="8"  y2="8"  stroke="#00b4d8" stroke-width="3" stroke-linecap="round"/>
+      <line x1="40" y1="20" x2="52" y2="8"  stroke="#00b4d8" stroke-width="3" stroke-linecap="round"/>
+      <line x1="40" y1="40" x2="52" y2="52" stroke="#00b4d8" stroke-width="3" stroke-linecap="round"/>
+      <line x1="20" y1="40" x2="8"  y2="52" stroke="#00b4d8" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="8"  cy="8"  r="7" fill="none" stroke="#00b4d8" stroke-width="2"/>
+      <circle cx="52" cy="8"  r="7" fill="none" stroke="#00b4d8" stroke-width="2"/>
+      <circle cx="52" cy="52" r="7" fill="none" stroke="#00b4d8" stroke-width="2"/>
+      <circle cx="8"  cy="52" r="7" fill="none" stroke="#00b4d8" stroke-width="2"/>
+      <rect x="22" y="22" width="16" height="16" rx="4" fill="#00b4d8"/>
+      <circle cx="30" cy="30" r="4" fill="#070e1a"/>
+    </svg>
+    <div>
+      <div class="header-title">AEROMESH</div>
+      <div class="header-subtitle">Byzantine-Resilient Drone Swarm · BFT Live Simulator</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--dim)">
+    <span>n=7 · f=2 · quorum=5</span>
+    <span style="color:var(--border)">|</span>
+    <span>CCY3302 · AAST · Spring 2026</span>
+  </div>
+</header>
+
+<!-- ── METRICS BAR ─────────────────────────────────────────── -->
+<div class="metrics">
+  <div class="metric">
+    <span class="metric-label">View</span>
+    <span class="metric-value" id="mView">0</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">Round</span>
+    <span class="metric-value" id="mRound">0</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">RSM Seq</span>
+    <span class="metric-value" id="mSeq">0</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">Byzantine</span>
+    <span class="metric-value" id="mByz">0/2</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">BW Load</span>
+    <span class="metric-value" id="mBW">—</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">Channel</span>
+    <span class="metric-value ok" id="mChan">CLEAR</span>
+  </div>
+  <div class="metric" style="margin-left:auto">
+    <span class="metric-label">Status</span>
+    <span class="metric-value ok" id="mStatus">CONNECTED</span>
+  </div>
+</div>
+
+<!-- ── MAIN ───────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- CANVAS -->
+  <div class="canvas-panel" id="canvasPanel">
+    <div id="starfield"></div>
+
+    <svg id="svgCanvas" viewBox="0 0 620 560" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Grid pattern -->
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a3050" stroke-width="0.4"/>
+        </pattern>
+        <!-- Glow filter -->
+        <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Soft glow -->
+        <filter id="softglow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="8" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Strong red glow -->
+        <filter id="redglow" x="-50%" y="-50%" width="200%" height="200%">
+          <feColorMatrix type="matrix" values="1 0 0 0 0.5  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
+          <feGaussianBlur in="red" stdDeviation="6" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Arrow marker -->
+        <marker id="arrowOk" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="#00b4d8"/>
+        </marker>
+        <marker id="arrowErr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="#e63946"/>
+        </marker>
+        <marker id="arrowGreen" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="#2dc653"/>
+        </marker>
+        <marker id="arrowAmber" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="#f4a261"/>
+        </marker>
+
+        <!-- Quadcopter drone symbol (top view) -->
+        <symbol id="drone-icon" viewBox="-28 -28 56 56">
+          <!-- Arms -->
+          <line x1="-8" y1="-8" x2="-21" y2="-21" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+          <line x1="8"  y1="-8" x2="21"  y2="-21" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+          <line x1="8"  y1="8"  x2="21"  y2="21"  stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+          <line x1="-8" y1="8"  x2="-21" y2="21"  stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+          <!-- Rotor hubs -->
+          <circle cx="-21" cy="-21" r="2.5" fill="currentColor"/>
+          <circle cx="21"  cy="-21" r="2.5" fill="currentColor"/>
+          <circle cx="21"  cy="21"  r="2.5" fill="currentColor"/>
+          <circle cx="-21" cy="21"  r="2.5" fill="currentColor"/>
+          <!-- Spinning rotors with animateTransform -->
+          <g transform="translate(-21,-21)">
+            <circle r="10" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.25"/>
+            <g>
+              <ellipse rx="10" ry="3" fill="currentColor" opacity="0.45"/>
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.22s" repeatCount="indefinite"/>
+            </g>
+          </g>
+          <g transform="translate(21,-21)">
+            <circle r="10" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.25"/>
+            <g>
+              <ellipse rx="10" ry="3" fill="currentColor" opacity="0.45"/>
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.22s" begin="-0.055s" repeatCount="indefinite"/>
+            </g>
+          </g>
+          <g transform="translate(21,21)">
+            <circle r="10" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.25"/>
+            <g>
+              <ellipse rx="10" ry="3" fill="currentColor" opacity="0.45"/>
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.22s" begin="-0.11s" repeatCount="indefinite"/>
+            </g>
+          </g>
+          <g transform="translate(-21,21)">
+            <circle r="10" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.25"/>
+            <g>
+              <ellipse rx="10" ry="3" fill="currentColor" opacity="0.45"/>
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.22s" begin="-0.165s" repeatCount="indefinite"/>
+            </g>
+          </g>
+          <!-- Body -->
+          <rect x="-9" y="-9" width="18" height="18" rx="4" fill="currentColor"/>
+          <!-- Camera lens -->
+          <circle r="3.5" fill="rgba(0,0,0,0.55)"/>
+          <circle r="1.4" cx="-0.8" cy="-0.8" fill="rgba(255,255,255,0.35)"/>
+        </symbol>
+      </defs>
+
+      <!-- Background grid (airspace) -->
+      <rect width="620" height="560" fill="url(#grid)" opacity="1"/>
+
+      <!-- Decorative outer ring -->
+      <circle cx="310" cy="278" r="185" fill="none" stroke="#1a3050" stroke-width="0.8" stroke-dasharray="4 8"/>
+      <circle cx="310" cy="278" r="148" fill="none" stroke="#162640" stroke-width="0.5" stroke-dasharray="2 6"/>
+
+      <!-- GCS icon (bottom-left corner) -->
+      <g transform="translate(42,502)">
+        <rect x="-30" y="-18" width="60" height="36" rx="6" fill="#0a1e33" stroke="#1a3050" stroke-width="1"/>
+        <text x="0" y="-4" text-anchor="middle" font-size="9" fill="#00b4d8" font-family="monospace" font-weight="bold">GCS</text>
+        <text x="0" y="8"  text-anchor="middle" font-size="7" fill="#64748b" font-family="monospace">3-of-4</text>
+        <!-- Antenna lines -->
+        <line x1="0" y1="-18" x2="-8" y2="-30" stroke="#1a3050" stroke-width="1.5"/>
+        <line x1="0" y1="-18" x2="8"  y2="-30" stroke="#1a3050" stroke-width="1.5"/>
+      </g>
+
+      <!-- Tier labels -->
+      <text x="310" y="20" text-anchor="middle" font-size="9" fill="#1e3c5a" font-family="monospace" letter-spacing="2">TIER 3 · FANET 5.8 GHz · &lt;5ms</text>
+      <text x="580" y="278" text-anchor="end" font-size="9" fill="#1e3c5a" font-family="monospace" writing-mode="tb" letter-spacing="1">AIRSPACE MAP</text>
+
+      <!-- Formula watermark -->
+      <text x="310" y="295" text-anchor="middle" font-size="42" fill="rgba(26,48,80,0.25)"
+            font-family="Georgia, serif" font-style="italic">n = 3f+1</text>
+
+      <!-- Arrow / particle layers -->
+      <g id="arrows"></g>
+      <g id="ripples"></g>
+      <g id="particles"></g>
+
+      <!-- Drone layer -->
+      <g id="drones"></g>
+    </svg>
+
+    <!-- Phase banner overlay -->
+    <div id="banner"></div>
+    <!-- Narration text overlay -->
+    <div id="narration"></div>
+    <!-- Flash overlay -->
+    <div id="flash"></div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="controls">
+      <div class="controls-title">Protocol Controls <span class="kbd-hint">keyboard: 1–7 · R</span></div>
+      <div class="btn-grid">
+        <button class="btn btn-bft"  onclick="send('bft_round')"        title="[1] Run BFT Round">
+          ▶ BFT Round <span class="btn-shortcut">[1] PREPARE→VOTE→COMMIT</span>
+        </button>
+        <button class="btn btn-byz"  onclick="send('inject_byzantine')" title="[2] Inject Byzantine">
+          ⚡ Byzantine <span class="btn-shortcut">[2] GPS Spoofing Attack</span>
+        </button>
+        <button class="btn btn-kill" onclick="send('kill_leader')"      title="[3] Kill Leader">
+          💥 Kill Leader <span class="btn-shortcut">[3] View-Change Protocol</span>
+        </button>
+        <button class="btn btn-jam"  onclick="send('rf_jam')"           title="[4] Toggle RF Jam">
+          📡 RF Jam <span class="btn-shortcut">[4] FHSS / SAFE_HOVER</span>
+        </button>
+        <button class="btn btn-gcs"  onclick="send('gcs_emergency')"    title="[5] GCS Emergency">
+          🛸 GCS Emrg <span class="btn-shortcut">[5] Dolev-Strong RTB</span>
+        </button>
+        <button class="btn btn-merge" onclick="send('below_quorum')"    title="[6] Below Quorum">
+          🔄 Merge <span class="btn-shortcut">[6] Below-Quorum Protocol</span>
+        </button>
+      </div>
+      <button class="btn-auto" onclick="send('auto_demo')" title="[7] Full auto-demo">
+        ▶▶ AUTO DEMO — All 6 Scenarios [7]
+      </button>
+      <div class="btn-row">
+        <button class="btn-reset" onclick="send('reset')">⟳ Reset [R]</button>
+        <div class="speed-row">
+          <span class="speed-label">Speed</span>
+          <input type="range" class="speed-slider" id="speedSlider"
+                 min="25" max="400" value="100" step="25"
+                 oninput="setSpeed(this.value)"/>
+          <span id="speedVal">1×</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RSM COMMIT LOG -->
+    <div class="rsm-log">
+      <div class="rsm-log-title">
+        <span>RSM Commit Log</span>
+        <span class="rsm-count" id="rsmCount">0</span>
+      </div>
+      <div id="rsmEntries"></div>
+    </div>
+
+    <!-- EVENT LOG -->
+    <div class="log-section">
+      <div class="log-title">Event Log</div>
+      <div id="eventLog"></div>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#00b4d8"></div>Leader</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2dc653"></div>Honest</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e63946"></div>Byzantine</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4a4a5a"></div>Crashed</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f4a261"></div>Safe Hover</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9b59b6"></div>Guard</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── WEBSOCKET ────────────────────────────────────────────────
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let ws, reconnTimer;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => { setStatus('CONNECTED', 'ok');  clearTimeout(reconnTimer); };
+  ws.onclose = () => { setStatus('OFFLINE',   'error'); reconnTimer = setTimeout(connect, 2500); };
+  ws.onerror = () => { setStatus('ERROR',     'error'); };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+}
+
+function send(action) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({action})); }
+function setStatus(t, cls) {
+  const el = document.getElementById('mStatus');
+  el.textContent = t;
+  el.className = 'metric-value ' + cls;
+}
+
+// ── MESSAGE HANDLER ──────────────────────────────────────────
+function handle(msg) {
+  switch (msg.type) {
+    case 'state':       renderState(msg);    break;
+    case 'log':         appendLog(msg);      break;
+    case 'banner':      showBanner(msg);     break;
+    case 'narrate':     showNarration(msg.text); break;
+    case 'arrow':       showArrow(msg);      break;
+    case 'clear_arrows':clearArrows();       break;
+    case 'ripple':      showRipple(msg);     break;
+    case 'rsm_commit':  addRsmEntry(msg);    break;
+    case 'rsm_clear':   clearRsm();          break;
+    case 'commit_flash':flashCanvas(msg.color || '#2dc653'); break;
+  }
+}
+
+// ── DRONE STATE ──────────────────────────────────────────────
+let drones = {};
+
+function renderState(msg) {
+  // Update metrics
+  document.getElementById('mView').textContent  = msg.view;
+  document.getElementById('mRound').textContent = msg.round;
+  document.getElementById('mSeq').textContent   = msg.seq;
+
+  const byzEl = document.getElementById('mByz');
+  byzEl.textContent = `${msg.byz}/2`;
+  byzEl.className = 'metric-value ' + (msg.byz > 0 ? 'error' : 'ok');
+
+  const bwEl = document.getElementById('mBW');
+  bwEl.textContent = msg.jammed ? 'JAMMED' : `${msg.bw_pct}%`;
+  bwEl.className   = 'metric-value ' + (msg.jammed ? 'error' : 'ok');
+
+  const chanEl = document.getElementById('mChan');
+  chanEl.textContent  = msg.jammed ? 'JAMMED' : 'CLEAR';
+  chanEl.className = 'metric-value ' + (msg.jammed ? 'error' : 'ok');
+
+  // Store drone positions
+  msg.drones.forEach(d => { drones[d.id] = d; });
+
+  // Render drones in SVG
+  const layer = document.getElementById('drones');
+  layer.innerHTML = '';
+
+  msg.drones.forEach(d => {
+    const g = createDroneIcon(d, msg.leader);
+    layer.appendChild(g);
+  });
+}
+
+function droneColor(d, leaderId) {
+  if (d.id === leaderId && d.state === 'HONEST') return '#00b4d8';
+  switch (d.state) {
+    case 'HONEST':      return d.role === 'GUARD' ? '#9b59b6' : '#2dc653';
+    case 'BYZANTINE':   return '#e63946';
+    case 'CRASHED':     return '#2a3040';
+    case 'QUARANTINED': return '#e67e00';
+    case 'SAFE_HOVER':  return '#f4a261';
+    default:            return '#94a3b8';
+  }
+}
+
+function createDroneIcon(d, leaderId) {
+  const color = droneColor(d, leaderId);
+  const isLeader    = d.id === leaderId && d.state === 'HONEST';
+  const isByzantine = d.state === 'BYZANTINE';
+  const isCrashed   = d.state === 'CRASHED';
+
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.setAttribute('transform', `translate(${d.x},${d.y})`);
+
+  // Hover animation offset per drone (staggered)
+  const hoverDelay = (d.id * 0.35).toFixed(2);
+  const animStyle  = isCrashed   ? '' :
+                     isByzantine ? `animation: drone-glitch 1.4s steps(1) ${hoverDelay}s infinite` :
+                                   `animation: drone-hover  2.5s ease-in-out ${hoverDelay}s infinite`;
+  g.setAttribute('style', animStyle);
+
+  // Leader glow ring
+  if (isLeader) {
+    const glow = document.createElementNS(SVG_NS, 'circle');
+    glow.setAttribute('r', '34');
+    glow.setAttribute('fill', 'none');
+    glow.setAttribute('stroke', '#00b4d8');
+    glow.setAttribute('stroke-width', '1.5');
+    glow.setAttribute('opacity', '0.35');
+    glow.setAttribute('filter', 'url(#softglow)');
+    g.appendChild(glow);
+
+    const pulse = document.createElementNS(SVG_NS, 'animate');
+    pulse.setAttribute('attributeName', 'opacity');
+    pulse.setAttribute('values', '0.5;0.15;0.5');
+    pulse.setAttribute('dur', '2s');
+    pulse.setAttribute('repeatCount', 'indefinite');
+    glow.appendChild(pulse);
+  }
+
+  // Byzantine warning ring
+  if (isByzantine) {
+    const ring = document.createElementNS(SVG_NS, 'circle');
+    ring.setAttribute('r', '30');
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', '#e63946');
+    ring.setAttribute('stroke-width', '2');
+    ring.setAttribute('stroke-dasharray', '4 4');
+    ring.setAttribute('opacity', '0.7');
+    ring.setAttribute('filter', 'url(#redglow)');
+    const rAnim = document.createElementNS(SVG_NS, 'animateTransform');
+    rAnim.setAttribute('attributeName', 'transform');
+    rAnim.setAttribute('type', 'rotate');
+    rAnim.setAttribute('from', '0');
+    rAnim.setAttribute('to', '360');
+    rAnim.setAttribute('dur', '3s');
+    rAnim.setAttribute('repeatCount', 'indefinite');
+    ring.appendChild(rAnim);
+    g.appendChild(ring);
+  }
+
+  // Use drone symbol
+  const useEl = document.createElementNS(SVG_NS, 'use');
+  useEl.setAttribute('href', '#drone-icon');
+  useEl.setAttribute('width',  '56');
+  useEl.setAttribute('height', '56');
+  useEl.setAttribute('x', '-28');
+  useEl.setAttribute('y', '-28');
+  useEl.setAttribute('color',   color);
+  useEl.setAttribute('opacity', isCrashed ? '0.3' : '1');
+  if (isLeader)    useEl.setAttribute('filter', 'url(#glow)');
+  if (isByzantine) useEl.setAttribute('filter', 'url(#redglow)');
+  g.appendChild(useEl);
+
+  // Crashed X mark
+  if (isCrashed) {
+    const xg = document.createElementNS(SVG_NS, 'g');
+    xg.setAttribute('opacity', '0.7');
+    const x1 = makeLine(-10,-10, 10, 10, '#e63946', 3);
+    const x2 = makeLine( 10,-10,-10, 10, '#e63946', 3);
+    xg.appendChild(x1); xg.appendChild(x2);
+    g.appendChild(xg);
+  }
+
+  // Label + role badge
+  const label = document.createElementNS(SVG_NS, 'text');
+  label.setAttribute('x', '0');
+  label.setAttribute('y', '38');
+  label.setAttribute('text-anchor', 'middle');
+  label.setAttribute('font-size', '11');
+  label.setAttribute('font-weight', '700');
+  label.setAttribute('font-family', 'monospace');
+  label.setAttribute('fill', color);
+  label.textContent = d.label;
+  g.appendChild(label);
+
+  const role = document.createElementNS(SVG_NS, 'text');
+  role.setAttribute('x', '0');
+  role.setAttribute('y', '49');
+  role.setAttribute('text-anchor', 'middle');
+  role.setAttribute('font-size', '8');
+  role.setAttribute('font-family', 'monospace');
+  role.setAttribute('fill', isLeader ? '#00b4d8' : '#3a5a7a');
+  role.textContent = d.role;
+  g.appendChild(role);
+
+  return g;
+}
+
+function makeLine(x1,y1,x2,y2,stroke,w) {
+  const l = document.createElementNS(SVG_NS, 'line');
+  l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+  l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+  l.setAttribute('stroke',stroke);
+  l.setAttribute('stroke-width',w);
+  l.setAttribute('stroke-linecap','round');
+  return l;
+}
+
+// ── MESSAGE ARROWS (particle-based) ──────────────────────────
+const ARROW_COLORS = {
+  PREPARE:      '#00b4d8',
+  VOTE:         '#2dc653',
+  COMMIT:       '#f77f00',
+  VOTE_CONFLICT:'#e63946',
+  FAKE_POS_A:   '#e63946',
+  FAKE_POS_B:   '#ff6b6b',
+  RTB_R1:       '#f4a261',
+  RTB_R2:       '#f4a261',
+  RTB_R3:       '#f4a261',
+};
+
+function showArrow(msg) {
+  const src = drones[msg.from];
+  const dst = drones[msg.to];
+  if (!src || !dst) return;
+
+  const color = msg.ok
+    ? (ARROW_COLORS[msg.kind] || '#00b4d8')
+    : '#e63946';
+
+  fireParticle(src, dst, color, msg.kind, msg.ok);
+  fireStaticArrow(src, dst, color, msg.ok);
+}
+
+function fireParticle(src, dst, color, kind, ok) {
+  const R = 28;
+  const dx = dst.x - src.x, dy = dst.y - src.y;
+  const len = Math.sqrt(dx*dx + dy*dy) || 1;
+  const sx = src.x + dx/len*R, sy = src.y + dy/len*R;
+  const ex = dst.x - dx/len*R, ey = dst.y - dy/len*R;
+
+  const layer = document.getElementById('particles');
+
+  // Glowing dot
+  const g = document.createElementNS(SVG_NS, 'g');
+
+  const outer = document.createElementNS(SVG_NS, 'circle');
+  outer.setAttribute('r', '7');
+  outer.setAttribute('fill', color);
+  outer.setAttribute('opacity', '0.3');
+  g.appendChild(outer);
+
+  const inner = document.createElementNS(SVG_NS, 'circle');
+  inner.setAttribute('r', '3.5');
+  inner.setAttribute('fill', color);
+  inner.setAttribute('filter', 'url(#glow)');
+  g.appendChild(inner);
+
+  // Label for kind
+  const lbl = document.createElementNS(SVG_NS, 'text');
+  lbl.setAttribute('y', '-10');
+  lbl.setAttribute('text-anchor', 'middle');
+  lbl.setAttribute('font-size', '7');
+  lbl.setAttribute('font-family', 'monospace');
+  lbl.setAttribute('fill', color);
+  lbl.setAttribute('opacity', '0.85');
+  lbl.textContent = kind.replace('_', ' ');
+  g.appendChild(lbl);
+
+  const anim = document.createElementNS(SVG_NS, 'animateMotion');
+  anim.setAttribute('dur',  '0.38s');
+  anim.setAttribute('fill', 'freeze');
+  anim.setAttribute('path', `M ${sx},${sy} L ${ex},${ey}`);
+  g.appendChild(anim);
+
+  layer.appendChild(g);
+  setTimeout(() => g.remove(), 550);
+}
+
+function fireStaticArrow(src, dst, color, ok) {
+  const R = 28;
+  const dx = dst.x - src.x, dy = dst.y - src.y;
+  const len = Math.sqrt(dx*dx + dy*dy) || 1;
+  const sx = src.x + dx/len*R, sy = src.y + dy/len*R;
+  const ex = dst.x - dx/len*(R+6), ey = dst.y - dy/len*(R+6);
+
+  const marker = ok ? (color === '#2dc653' ? 'url(#arrowGreen)' :
+                       color === '#f77f00' ? 'url(#arrowAmber)' :
+                       'url(#arrowOk)') : 'url(#arrowErr)';
+
+  const line = document.createElementNS(SVG_NS, 'line');
+  line.setAttribute('x1', sx); line.setAttribute('y1', sy);
+  line.setAttribute('x2', ex); line.setAttribute('y2', ey);
+  line.setAttribute('stroke', color);
+  line.setAttribute('stroke-width', ok ? '1.5' : '2');
+  line.setAttribute('stroke-opacity', '0.55');
+  line.setAttribute('stroke-dasharray', ok ? 'none' : '5 3');
+  line.setAttribute('marker-end', marker);
+  line.classList.add('msg-arrow');
+  document.getElementById('arrows').appendChild(line);
+}
+
+function clearArrows() {
+  document.getElementById('arrows').innerHTML    = '';
+  document.getElementById('particles').innerHTML = '';
+}
+
+// ── RIPPLE EFFECTS ────────────────────────────────────────────
+function showRipple(msg) {
+  const d = drones[msg.id];
+  if (!d) return;
+  const color = msg.color || '#00b4d8';
+  const layer = document.getElementById('ripples');
+
+  for (let i = 0; i < 2; i++) {
+    const c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('cx', d.x);
+    c.setAttribute('cy', d.y);
+    c.setAttribute('r',  '20');
+    c.setAttribute('fill', 'none');
+    c.setAttribute('stroke', color);
+    c.setAttribute('stroke-width', '2');
+
+    const animR = document.createElementNS(SVG_NS, 'animate');
+    animR.setAttribute('attributeName', 'r');
+    animR.setAttribute('from', '20');
+    animR.setAttribute('to',   '90');
+    animR.setAttribute('dur',  `${0.7 + i*0.2}s`);
+    animR.setAttribute('begin', `${i*0.18}s`);
+    animR.setAttribute('fill', 'freeze');
+    c.appendChild(animR);
+
+    const animOp = document.createElementNS(SVG_NS, 'animate');
+    animOp.setAttribute('attributeName', 'opacity');
+    animOp.setAttribute('from', '0.7');
+    animOp.setAttribute('to',   '0');
+    animOp.setAttribute('dur',  `${0.7 + i*0.2}s`);
+    animOp.setAttribute('begin', `${i*0.18}s`);
+    animOp.setAttribute('fill', 'freeze');
+    c.appendChild(animOp);
+
+    layer.appendChild(c);
+    setTimeout(() => c.remove(), 1100);
+  }
+}
+
+// ── BANNER ────────────────────────────────────────────────────
+const BANNER_COLORS = {
+  blue:   { bg:'rgba(0,100,180,0.85)',   border:'#00b4d8', text:'#caf0f8' },
+  green:  { bg:'rgba(10,100,50,0.85)',   border:'#2dc653', text:'#b7f5d0' },
+  orange: { bg:'rgba(150,60,0,0.85)',    border:'#f77f00', text:'#ffe5c0' },
+  red:    { bg:'rgba(160,20,30,0.85)',   border:'#e63946', text:'#ffd0d3' },
+  purple: { bg:'rgba(80,20,110,0.85)',   border:'#9b59b6', text:'#e0c3fc' },
+  amber:  { bg:'rgba(130,80,0,0.85)',    border:'#f4a261', text:'#fff0cc' },
+  gray:   { bg:'rgba(40,50,70,0.85)',    border:'#64748b', text:'#c0d0e0' },
+};
+
+function showBanner(msg) {
+  const el = document.getElementById('banner');
+  if (!msg.text) {
+    el.classList.remove('visible');
+    return;
+  }
+  const c = BANNER_COLORS[msg.color] || BANNER_COLORS.blue;
+  el.style.background   = c.bg;
+  el.style.border       = `1px solid ${c.border}`;
+  el.style.color        = c.text;
+  el.style.boxShadow    = `0 0 20px ${c.border}55`;
+  el.textContent = msg.text;
+  el.classList.add('visible');
+}
+
+// ── NARRATION ────────────────────────────────────────────────
+function showNarration(text) {
+  const el = document.getElementById('narration');
+  if (!text) {
+    el.classList.remove('visible');
+    return;
+  }
+  el.textContent = text;
+  el.classList.add('visible');
+}
+
+// ── CANVAS FLASH ─────────────────────────────────────────────
+function flashCanvas(color) {
+  const el = document.getElementById('flash');
+  el.style.background = color;
+  el.style.opacity    = '0.18';
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.6s ease';
+    el.style.opacity    = '0';
+    setTimeout(() => { el.style.transition = ''; }, 700);
+  }, 80);
+}
+
+// ── RSM LOG ───────────────────────────────────────────────────
+let rsmCount = 0;
+
+function addRsmEntry(msg) {
+  rsmCount++;
+  document.getElementById('rsmCount').textContent = rsmCount;
+
+  const entries = document.getElementById('rsmEntries');
+  const row = document.createElement('div');
+  row.className = 'rsm-entry';
+  row.innerHTML = `
+    <span class="rsm-seq">#${msg.seq}</span>
+    <span class="rsm-cmd">${msg.cmd}</span>
+    <span class="rsm-view">v${msg.view}</span>
+  `;
+  entries.insertBefore(row, entries.firstChild);
+
+  // Keep max 5 entries visible
+  while (entries.children.length > 5) {
+    entries.removeChild(entries.lastChild);
+  }
+}
+
+function clearRsm() {
+  rsmCount = 0;
+  document.getElementById('rsmCount').textContent = '0';
+  document.getElementById('rsmEntries').innerHTML = '';
+}
+
+// ── EVENT LOG ────────────────────────────────────────────────
+const MAX_LOG = 200;
+
+function appendLog(msg) {
+  const log = document.getElementById('eventLog');
+  const now = new Date();
+  const ts  = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+
+  const row = document.createElement('div');
+  row.className = `log-${msg.level || 'info'}`;
+  row.innerHTML = `<span class="log-ts">${ts}</span>${escHtml(msg.text)}`;
+  log.appendChild(row);
+
+  // Prune
+  while (log.children.length > MAX_LOG) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── SPEED CONTROL ─────────────────────────────────────────────
+function setSpeed(val) {
+  const speed = val / 100;
+  const label = speed === 1 ? '1×' : speed < 1 ? `${speed}×` : `${speed}×`;
+  document.getElementById('speedVal').textContent = label;
+
+  // Update slider gradient
+  const pct = ((val - 25) / (400 - 25)) * 100;
+  document.getElementById('speedSlider').style.background =
+    `linear-gradient(90deg, var(--teal) ${pct}%, var(--border) ${pct}%)`;
+
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({action: 'set_speed', speed}));
+  }
+}
+
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const map = {
+    '1': 'bft_round',
+    '2': 'inject_byzantine',
+    '3': 'kill_leader',
+    '4': 'rf_jam',
+    '5': 'gcs_emergency',
+    '6': 'below_quorum',
+    '7': 'auto_demo',
+    'r': 'reset',
+    'R': 'reset',
+    ' ': 'bft_round',
+  };
+  if (map[e.key]) { e.preventDefault(); send(map[e.key]); }
+});
+
+// ── STAR FIELD ────────────────────────────────────────────────
+function initStars() {
+  const container = document.getElementById('starfield');
+  const rect = document.getElementById('canvasPanel').getBoundingClientRect();
+  const W = rect.width || 800, H = rect.height || 500;
+
+  for (let i = 0; i < 120; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    const size = Math.random() < 0.85 ? 1 : 2;
+    star.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${(Math.random()*W).toFixed(1)}px;
+      top:${(Math.random()*H).toFixed(1)}px;
+      opacity:${(0.1 + Math.random()*0.5).toFixed(2)};
+      animation: drone-pulse ${(2 + Math.random()*4).toFixed(1)}s ease-in-out ${(Math.random()*4).toFixed(1)}s infinite;
+    `;
+    container.appendChild(star);
+  }
+}
+
+// ── BOOT ─────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initStars();
+  connect();
+  // Initialise speed slider display
+  setSpeed(100);
+});
+</script>
+</body>
+</html>
